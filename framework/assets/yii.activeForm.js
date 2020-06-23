@@ -14,11 +14,13 @@
     $.fn.yiiActiveForm = function (method) {
         if (methods[method]) {
             return methods[method].apply(this, Array.prototype.slice.call(arguments, 1));
-        } else if (typeof method === 'object' || !method) {
-            return methods.init.apply(this, arguments);
         } else {
-            $.error('Method ' + method + ' does not exist on jQuery.yiiActiveForm');
-            return false;
+            if (typeof method === 'object' || !method) {
+                return methods.init.apply(this, arguments);
+            } else {
+                $.error('Method ' + method + ' does not exist on jQuery.yiiActiveForm');
+                return false;
+            }
         }
     };
 
@@ -332,10 +334,17 @@
                 }
                 // pass SELECT without options
                 if ($input.length && $input[0].tagName.toLowerCase() === 'select') {
-                    if (!$input[0].options.length) {
-                        return true;
-                    } else if (($input[0].options.length === 1) && ($input[0].options[0].value === '')) {
-                        return true;
+                     var opts = $input[0].options, isEmpty = !opts || !opts.length, isRequired = $input.attr('required'),
+                        isMultiple = $input.attr('multiple'), size = $input.attr('size') || 1;
+                    // check if valid HTML markup for select input, else return validation as `true`
+                    // https://w3c.github.io/html-reference/select.html
+                    if (isRequired && !isMultiple && parseInt(size, 10) === 1) { // invalid select markup condition
+                        if (isEmpty) { // empty option elements for the select
+                            return true;
+                        }
+                        if (opts[0] && (opts[0].value !== '' && opts[0].text !== '')) { // first option is not empty
+                            return true;
+                        }
                     }
                 }
                 this.cancelled = false;
@@ -403,14 +412,16 @@
                             data.submitting = false;
                             submitFinalize($form);
                         }
-                    });
-                } else if (data.submitting) {
-                    // delay callback so that the form can be submitted without problem
-                    window.setTimeout(function () {
-                        updateInputs($form, messages, submitting);
-                    }, 200);
+                    });              
                 } else {
-                    updateInputs($form, messages, submitting);
+                    if (data.submitting) {
+                        // delay callback so that the form can be submitted without problem
+                        window.setTimeout(function () {
+                            updateInputs($form, messages, submitting);
+                        }, 200);
+                    } else {
+                        updateInputs($form, messages, submitting);
+                    }
                 }
             });
         },
@@ -721,14 +732,10 @@
             updateSummary($form, messages);
             if (errorAttributes.length) {
                 if (data.settings.scrollToError) {
-                    var top = $form.find($.map(errorAttributes, function(attribute) {
+                    var h = $(document).height(), top = $form.find($.map(errorAttributes, function (attribute) {
                         return attribute.input;
                     }).join(',')).first().closest(':visible').offset().top - data.settings.scrollToErrorOffset;
-                    if (top < 0) {
-                        top = 0;
-                    } else if (top > $(document).height()) {
-                        top = $(document).height();
-                    }
+                    top = top < 0 ? 0 : (top > h ? h : top);
                     var wtop = $(window).scrollTop();
                     if (top < wtop || top > wtop + $(window).height()) {
                         $(window).scrollTop(top);
